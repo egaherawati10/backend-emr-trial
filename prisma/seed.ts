@@ -16,6 +16,7 @@ async function main() {
   const admin = await prisma.user.create({
     data: {
       name: 'Admin One',
+      username: 'admin1',
       email: 'admin@example.com',
       password: adminPassword,
       role: UserRole.admin,
@@ -26,6 +27,7 @@ async function main() {
   const doctor = await prisma.user.create({
     data: {
       name: 'Dr. John Doe',
+      username: 'drjohn',
       email: 'doctor@example.com',
       password: doctorPassword,
       role: UserRole.doctor,
@@ -36,6 +38,7 @@ async function main() {
   const pharmacist = await prisma.user.create({
     data: {
       name: 'Pharmacist Jane',
+      username: 'jane',
       email: 'pharmacist@example.com',
       password: pharmacistPassword,
       role: UserRole.pharmacist,
@@ -46,6 +49,7 @@ async function main() {
   const cashier = await prisma.user.create({
     data: {
       name: 'Cashier Mike',
+      username: 'mike',
       email: 'cashier@example.com',
       password: cashierPassword,
       role: UserRole.cashier,
@@ -56,6 +60,7 @@ async function main() {
   const patientUser = await prisma.user.create({
     data: {
       name: 'Patient Sam',
+      username: 'sam',
       email: 'patient@example.com',
       password: patientPassword,
       role: UserRole.patient,
