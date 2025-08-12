@@ -94,6 +94,7 @@ model Prescription {
   medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id])
   pharmacist      User?         @relation("PharmacistPrescriptions", fields: [pharmacistId], references: [id])
   items           PrescriptionItem[]
+  payment         Payment?
 }
 
 model PrescriptionItem {
@@ -119,17 +120,19 @@ model Medicine {
 }
 
 model Payment {
-  id         Int       @id @default(autoincrement())
-  patientId  Int
-  cashierId  Int
-  totalAmount Decimal   @db.Decimal(10,2)
-  paymentDate DateTime
-  method      String
-  status      PaymentStatus @default(pending)
+  id             Int       @id @default(autoincrement())
+  patientId      Int
+  cashierId      Int
+  prescriptionId Int?      @unique
+  totalAmount    Decimal   @db.Decimal(10,2)
+  paymentDate    DateTime
+  method         String
+  status         PaymentStatus @default(pending)
 
-  patient     PatientProfile @relation(fields: [patientId], references: [id])
-  cashier     User           @relation("CashierPayments", fields: [cashierId], references: [id])
-  items       PaymentItem[]
+  patient        PatientProfile @relation(fields: [patientId], references: [id])
+  cashier        User           @relation("CashierPayments", fields: [cashierId], references: [id])
+  prescription   Prescription?  @relation(fields: [prescriptionId], references: [id])
+  items          PaymentItem[]
 }
 
 model PaymentItem {

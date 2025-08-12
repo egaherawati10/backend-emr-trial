@@ -11,7 +11,7 @@ async function main() {
   const cashierPassword = await hash('cashier123', 10);
   const patientPassword = await hash('patient123', 10);
 
-  // Users
+  // Create Users
   const admin = await prisma.user.create({
     data: {
       name: 'Admin One',
@@ -84,7 +84,7 @@ async function main() {
       name: 'Paracetamol',
       type: 'Tablet',
       stock: 200,
-      price: 5000,
+      price: '5000.00',
     },
   });
 
@@ -93,7 +93,7 @@ async function main() {
       name: 'Amoxicillin',
       type: 'Capsule',
       stock: 150,
-      price: 10000,
+      price: '10000.00', // Decimal as string
     },
   });
 
@@ -108,7 +108,7 @@ async function main() {
     },
   });
 
-  // SOAP
+  // SOAP Record
   await prisma.record.create({
     data: {
       patientId: patientProfile.id,
@@ -155,7 +155,8 @@ async function main() {
     data: {
       patientId: patientProfile.id,
       cashierId: cashier.id,
-      totalAmount: 80000,
+      prescriptionId: prescription.id,
+      totalAmount: '80000.00',
       paymentDate: new Date(),
       method: 'Cash',
       status: PaymentStatus.paid,
@@ -168,12 +169,12 @@ async function main() {
       {
         paymentId: payment.id,
         description: 'Consultation Fee',
-        amount: 50000,
+        amount: '50000.00',
       },
       {
         paymentId: payment.id,
         description: 'Medicines',
-        amount: 30000,
+        amount: '30000.00',
       },
     ],
   });
