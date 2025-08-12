@@ -93,7 +93,7 @@ async function main() {
       name: 'Amoxicillin',
       type: 'Capsule',
       stock: 150,
-      price: '10000.00', // Decimal as string
+      price: '10000.00',
     },
   });
 
