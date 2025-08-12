@@ -1,15 +1,9 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql" 
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -45,6 +39,7 @@ model User {
   medicalRecords MedicalRecord[]   @relation("DoctorMedicalRecords")
   prescriptions  Prescription[]    @relation("PharmacistPrescriptions")
   payments       Payment[]         @relation("CashierPayments")
+  soapNotes      Record[]          @relation("DoctorSOAP")
 }
 
 model PatientProfile {
@@ -58,6 +53,7 @@ model PatientProfile {
   user            User            @relation(fields: [userId], references: [id])
   medicalRecords  MedicalRecord[]
   payments        Payment[]
+  soapNotes       Record[]        @relation("PatientSOAP")
 }
 
 model MedicalRecord {
@@ -71,6 +67,21 @@ model MedicalRecord {
   patient    PatientProfile @relation(fields: [patientId], references: [id])
   doctor     User           @relation("DoctorMedicalRecords", fields: [doctorId], references: [id])
   prescriptions Prescription[]
+}
+
+model Record {
+  id          Int       @id @default(autoincrement())
+  patientId   Int
+  doctorId    Int
+  subjective  String
+  objective   String
+  assessment  String
+  planning    String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  patient     PatientProfile @relation("PatientSOAP", fields: [patientId], references: [id])
+  doctor      User           @relation("DoctorSOAP", fields: [doctorId], references: [id])
 }
 
 model Prescription {

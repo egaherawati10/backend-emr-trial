@@ -1,11 +1,10 @@
 import { PrismaClient, UserRole, UserStatus, PaymentStatus } from '@prisma/client';
 import { hash } from 'bcrypt';
-import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
-
+  // Hash passwords
   const adminPassword = await hash('admin123', 10);
   const doctorPassword = await hash('doctor123', 10);
   const pharmacistPassword = await hash('pharma123', 10);
@@ -106,6 +105,18 @@ async function main() {
       visitDate: new Date(),
       diagnosis: 'Common Cold',
       notes: 'Rest and drink fluids',
+    },
+  });
+
+  // SOAP
+  await prisma.record.create({
+    data: {
+      patientId: patientProfile.id,
+      doctorId: doctor.id,
+      subjective: 'Patient reports sore throat and mild fever for 2 days.',
+      objective: 'Temperature: 38°C, mild pharyngeal redness.',
+      assessment: 'Likely viral upper respiratory infection.',
+      planning: 'Advise rest, increase fluid intake, prescribe paracetamol.',
     },
   });
 
