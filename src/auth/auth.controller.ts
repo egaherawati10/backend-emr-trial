@@ -1,36 +1,31 @@
-import { Controller, Get, Post, Body, UseGuards, UnauthorizedException, InternalServerErrorException, ConflictException, BadRequestException, Request } from '@nestjs/common';
+import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { User } from '@prisma/client';
-import { LocalAuthGuard } from './local-auth.guard';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  async register(@Body() dto: RegisterDto) {
-    try {
-      return await this.authService.register(dto);
-    } catch (error) {
-      if (error instanceof ConflictException) {
-        throw new BadRequestException('Email or username already exists');
-      }
-      throw new InternalServerErrorException('Registration failed');
-    }
+  register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
   }
 
-  @UseGuards(LocalAuthGuard)
   @Post('login')
-  async login(@Request() req: { user: User }) {
-    if (!req.user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
+  login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
+  }
 
-    try {
-      return this.authService.login(req.user);
-    } catch (error) {
-      throw new InternalServerErrorException('Login failed');
-    }
+  @Post('logout')
+  logout() {
+    return this.authService.logout();
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  profile(@Request() req: any) {
+    return this.authService.profile(req.user.userId);
   }
 }

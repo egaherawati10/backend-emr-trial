@@ -1,26 +1,57 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
 
 @Injectable()
 export class PatientsService {
-  create(createPatientDto: CreatePatientDto) {
-    return 'This action adds a new patient';
+  constructor(private prisma: PrismaService) {}
+
+  async findAll() {
+    return this.prisma.patientProfile.findMany({
+      include: {
+        user: { select: { id: true, name: true, email: true, username: true, role: true } },
+        clerk: { select: { id: true, name: true, email: true } },
+      },
+    });
   }
 
-  findAll() {
-    return `This action returns all patients`;
+  async findOne(id: number) {
+    const patient = await this.prisma.patientProfile.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, name: true, email: true, username: true, role: true } },
+        clerk: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (!patient) throw new NotFoundException('Patient not found');
+    return patient;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} patient`;
+  async create(data: CreatePatientDto) {
+    return this.prisma.patientProfile.create({
+      data,
+      include: {
+        user: { select: { id: true, name: true, email: true, username: true, role: true } },
+        clerk: { select: { id: true, name: true, email: true } },
+      },
+    });
   }
 
-  update(id: number, updatePatientDto: UpdatePatientDto) {
-    return `This action updates a #${id} patient`;
+  async update(id: number, data: UpdatePatientDto) {
+    await this.findOne(id); // ensure exists
+    return this.prisma.patientProfile.update({
+      where: { id },
+      data,
+      include: {
+        user: { select: { id: true, name: true, email: true, username: true, role: true } },
+        clerk: { select: { id: true, name: true, email: true } },
+      },
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} patient`;
+  async remove(id: number) {
+    await this.findOne(id);
+    return this.prisma.patientProfile.delete({ where: { id } });
   }
 }

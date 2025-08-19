@@ -1,75 +1,69 @@
-import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
-import { UsersService } from 'src/users/users.service';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
+    private prisma: PrismaService,
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(username: string, password: string): Promise<User | null> {
-    try {
-      const user = await this.usersService.getUserByUsername(username);
-      if (!user) return null;
+  async register(data: RegisterDto) {
+    const exists = await this.prisma.user.findFirst({
+      where: { OR: [{ username: data.username }, { email: data.email }] },
+      select: { id: true },
+    });
+    if (exists) throw new ConflictException('Username or email already exists');
 
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      return isPasswordValid ? user : null;
-    } catch (error) {
-      throw new InternalServerErrorException('Error validating user');
-    }
+    const hash = await bcrypt.hash(data.password, 10);
+
+    const user = await this.prisma.user.create({
+      data: {
+        name: data.name,
+        username: data.username,
+        email: data.email,
+        password: hash,
+        role: data.role,
+        status: 'active', // optional, Prisma default is active
+      },
+      select: {
+        id: true, name: true, username: true, email: true, role: true, status: true,
+        createdAt: true, updatedAt: true,
+      },
+    });
+
+    return { message: 'Registration successful', user };
   }
 
-  login(user: User): { access_token: string; user: Pick<User, 'id' | 'name' | 'email' | 'role'> } {
-    try {
-      const payload = {
-        email: user.email,
-        sub: user.id,
-        role: user.role,
-      };
-      return {
-        access_token: this.jwtService.sign(payload),
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
-      };
-    } catch (error) {
-      throw new InternalServerErrorException('Login failed');
-    }
+  async login(data: LoginDto) {
+    const user = await this.prisma.user.findUnique({ where: { username: data.username } });
+    if (!user) throw new UnauthorizedException('Invalid credentials');
+
+    const ok = await bcrypt.compare(data.password, user.password);
+    if (!ok) throw new UnauthorizedException('Invalid credentials');
+
+    const payload = { sub: user.id, username: user.username, role: user.role };
+    const access_token = await this.jwtService.signAsync(payload);
+
+    return { access_token };
   }
 
-  async register(dto: RegisterDto): Promise<Omit<User, 'password'>> {
-    try {
-      const { name, username, email, password, status, role } = dto;
+  // For simple JWT-only sessions, logout is a no-op unless you implement blacklisting
+  async logout() {
+    return { message: 'Logged out successfully' };
+  }
 
-      const existing = await this.usersService.getUserByEmail(email);
-      if (existing) {
-        throw new ConflictException('Email is already registered');
-      }
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-
-      const newUser = await this.usersService.createUser({
-        name,
-        username,
-        email,
-        password: hashedPassword,
-        status,
-        role,
-      });
-
-      const { password: _removed, ...userWithoutPassword } = newUser;
-      return userWithoutPassword;
-    } catch (error) {
-      if (error instanceof ConflictException) throw error;
-      throw new InternalServerErrorException('Registration failed');
-    }
+  async profile(userId: number) {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, name: true, username: true, email: true, role: true, status: true,
+        createdAt: true, updatedAt: true,
+      },
+    });
   }
 }

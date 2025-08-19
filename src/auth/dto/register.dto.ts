@@ -19,11 +19,10 @@ export class RegisterDto {
   @IsNotEmpty()
   password: string;
 
-  @IsEnum(UserStatus)
-  @IsNotEmpty()
-  status: UserStatus;
-
   @IsEnum(UserRole)
   @IsNotEmpty()
   role: UserRole;
+  
+  @IsEnum(UserStatus)
+  status: UserStatus;
 }
