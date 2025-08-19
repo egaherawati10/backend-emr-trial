@@ -5,6 +5,14 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { ServicesModule } from './services/services.module';
+import { PrescriptionsModule } from './prescriptions/prescriptions.module';
+import { RecordsModule } from './records/records.module';
+import { PatientsModule } from './patients/patients.module';
+import { PaymentsModule } from './payments/payments.module';
+import { MedicalRecordsModule } from './medical-records/medical-records.module';
+import { MedicinesModule } from './medicines/medicines.module';
+import { ServiceItemsModule } from './service-items/service-items.module';
 
 @Module({
   imports: [
@@ -19,6 +27,14 @@ import { AuthModule } from './auth/auth.module';
     PrismaModule,
     UsersModule,
     AuthModule,
+    ServicesModule,
+    PrescriptionsModule,
+    RecordsModule,
+    PatientsModule,
+    PaymentsModule,
+    MedicalRecordsModule,
+    MedicinesModule,
+    ServiceItemsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
