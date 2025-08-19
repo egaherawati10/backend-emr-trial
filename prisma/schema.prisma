@@ -3,16 +3,18 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "postgresql" // change if needed
   url      = env("DATABASE_URL")
 }
 
+// ================== ENUMS ==================
 enum UserRole {
   admin
   doctor
   pharmacist
   cashier
   patient
+  registration_clerk
 }
 
 enum UserStatus {
@@ -26,120 +28,222 @@ enum PaymentStatus {
   cancelled
 }
 
+enum Gender {
+  male
+  female
+  other
+}
+
+enum PaymentMethod {
+  cash
+  card
+  insurance
+  transfer
+}
+
+// ================== MODELS ==================
+
+// ---------- USER ----------
 model User {
-  id        Int       @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   name      String
-  username  String    @unique
-  email     String    @unique
+  username  String     @unique
+  email     String     @unique
   password  String
   role      UserRole
   status    UserStatus @default(active)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   patientProfile PatientProfile?
-  medicalRecords MedicalRecord[]   @relation("DoctorMedicalRecords")
-  prescriptions  Prescription[]    @relation("PharmacistPrescriptions")
-  payments       Payment[]         @relation("CashierPayments")
-  soapNotes      Record[]          @relation("DoctorSOAP")
+  medicalRecords MedicalRecord[] @relation("DoctorMedicalRecords")
+  clerkRecords   MedicalRecord[] @relation("ClerkMedicalRecords")
+  records        Record[]
+  prescriptions  Prescription[]  @relation("DoctorPrescriptions")
+  pharmacistPrescriptions Prescription[] @relation("PharmacistPrescriptions")
+  services      Service[]
+  clerkPatientProfiles PatientProfile[] @relation("ClerkPatientProfiles")
 }
 
+// ---------- PATIENT PROFILE ----------
 model PatientProfile {
-  id       Int    @id @default(autoincrement())
-  userId   Int    @unique
-  dob      DateTime
-  gender   String
-  address  String
-  phone    String
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  dob       DateTime
+  gender    Gender
+  address   String
+  phone     String
+  clerkId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user            User            @relation(fields: [userId], references: [id])
-  medicalRecords  MedicalRecord[]
-  payments        Payment[]
-  soapNotes       Record[]        @relation("PatientSOAP")
+  user   User   @relation(fields: [userId], references: [id])
+  clerk  User   @relation("ClerkPatientProfiles", fields: [clerkId], references: [id])
+  medicalRecords MedicalRecord[]
+  records        Record[]
+  prescriptions  Prescription[]
+  services       Service[]
+  payments       Payment[]
 }
 
+// ---------- MEDICAL RECORD ----------
 model MedicalRecord {
-  id         Int       @id @default(autoincrement())
-  patientId  Int
-  doctorId   Int
-  visitDate  DateTime
-  diagnosis  String
-  notes      String?
+  id        Int      @id @default(autoincrement())
+  patientId Int
+  doctorId  Int
+  clerkId   Int
+  visitDate DateTime
+  diagnosis String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  patient    PatientProfile @relation(fields: [patientId], references: [id])
-  doctor     User           @relation("DoctorMedicalRecords", fields: [doctorId], references: [id])
+  patient PatientProfile @relation(fields: [patientId], references: [id])
+  doctor  User           @relation("DoctorMedicalRecords", fields: [doctorId], references: [id])
+  clerk   User           @relation("ClerkMedicalRecords", fields: [clerkId], references: [id])
+
+  records       Record[]
   prescriptions Prescription[]
+  services      Service[]
+  payments      Payment[]
 }
 
+// ---------- SOAP RECORD ----------
 model Record {
-  id          Int       @id @default(autoincrement())
-  patientId   Int
-  doctorId    Int
-  subjective  String
-  objective   String
-  assessment  String
-  planning    String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  patient     PatientProfile @relation("PatientSOAP", fields: [patientId], references: [id])
-  doctor      User           @relation("DoctorSOAP", fields: [doctorId], references: [id])
-}
-
-model Prescription {
-  id              Int       @id @default(autoincrement())
+  id              Int      @id @default(autoincrement())
   medicalRecordId Int
-  pharmacistId    Int?
-  dateIssued      DateTime
-  notes           String?
+  patientId       Int
+  doctorId        Int
+  subjective      String?
+  objective       String?
+  assessment      String?
+  planning        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  medicalRecord   MedicalRecord @relation(fields: [medicalRecordId], references: [id])
-  pharmacist      User?         @relation("PharmacistPrescriptions", fields: [pharmacistId], references: [id])
-  items           PrescriptionItem[]
-  payment         Payment?
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id])
+  patient       PatientProfile @relation(fields: [patientId], references: [id])
+  doctor        User           @relation(fields: [doctorId], references: [id])
 }
 
+// ---------- MEDICINE ----------
+model Medicine {
+  id           Int      @id @default(autoincrement())
+  name         String
+  dosage       String
+  type         String
+  manufacturer String
+  stock        Int
+  price        Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  prescriptionItems PrescriptionItem[]
+}
+
+// ---------- PRESCRIPTION ----------
+model Prescription {
+  id             Int      @id @default(autoincrement())
+  medicalRecordId Int
+  doctorId       Int
+  pharmacistId   Int
+  patientId      Int
+  dateIssued     DateTime
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id])
+  doctor        User           @relation("DoctorPrescriptions", fields: [doctorId], references: [id])
+  pharmacist    User           @relation("PharmacistPrescriptions", fields: [pharmacistId], references: [id])
+  patient       PatientProfile @relation(fields: [patientId], references: [id])
+
+  items PrescriptionItem[]
+}
+
+// ---------- PRESCRIPTION ITEM ----------
 model PrescriptionItem {
-  id             Int       @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   prescriptionId Int
   medicineId     Int
   dosage         String
   quantity       Int
+  price          Float
   instructions   String?
 
-  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
-  medicine       Medicine     @relation(fields: [medicineId], references: [id])
+  prescription Prescription @relation(fields: [prescriptionId], references: [id])
+  medicine     Medicine     @relation(fields: [medicineId], references: [id])
+  paymentItems PaymentItem[]
 }
 
-model Medicine {
-  id       Int       @id @default(autoincrement())
-  name     String
-  type     String
-  stock    Int
-  price    Decimal   @db.Decimal(10,2)
-
-  items    PrescriptionItem[]
-}
-
-model Payment {
-  id             Int       @id @default(autoincrement())
+// ---------- SERVICE ----------
+model Service {
+  id             Int      @id @default(autoincrement())
   patientId      Int
-  cashierId      Int
-  prescriptionId Int?      @unique
-  totalAmount    Decimal   @db.Decimal(10,2)
-  paymentDate    DateTime
-  method         String
-  status         PaymentStatus @default(pending)
+  doctorId       Int
+  medicalRecordId Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  patient        PatientProfile @relation(fields: [patientId], references: [id])
-  cashier        User           @relation("CashierPayments", fields: [cashierId], references: [id])
-  prescription   Prescription?  @relation(fields: [prescriptionId], references: [id])
-  items          PaymentItem[]
+  patient       PatientProfile @relation(fields: [patientId], references: [id])
+  doctor        User           @relation(fields: [doctorId], references: [id])
+  medicalRecord MedicalRecord  @relation(fields: [medicalRecordId], references: [id])
+
+  serviceItems ServiceOnServiceItem[]
 }
 
-model PaymentItem {
-  id         Int     @id @default(autoincrement())
-  paymentId  Int
-  description String
-  amount     Decimal @db.Decimal(10,2)
+// ---------- SERVICE ITEM ----------
+model ServiceItem {
+  id        Int      @id @default(autoincrement())
+  name      String
+  price     Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  payment    Payment @relation(fields: [paymentId], references: [id])
+  services ServiceOnServiceItem[]
+}
+
+// ---------- SERVICE ON SERVICE ITEM ----------
+model ServiceOnServiceItem {
+  id           Int     @id @default(autoincrement())
+  serviceId    Int
+  serviceItemId Int
+  quantity     Int     @default(1)
+  price        Float
+
+  service     Service     @relation(fields: [serviceId], references: [id])
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id])
+
+  paymentItems PaymentItem[]
+
+  @@unique([serviceId, serviceItemId])
+}
+
+// ---------- PAYMENT ----------
+model Payment {
+  id             Int      @id @default(autoincrement())
+  medicalRecordId Int
+  patientId      Int
+  status         PaymentStatus
+  method         PaymentMethod
+  date           DateTime
+  totalAmount    Float
+
+  medicalRecord MedicalRecord  @relation(fields: [medicalRecordId], references: [id])
+  patient       PatientProfile @relation(fields: [patientId], references: [id])
+  items         PaymentItem[]
+}
+
+// ---------- PAYMENT ITEM ----------
+model PaymentItem {
+  id                    Int      @id @default(autoincrement())
+  paymentId             Int
+  description           String
+  amount                Float
+  prescriptionItemId    Int?
+  serviceOnServiceItemId Int?
+
+  payment         Payment         @relation(fields: [paymentId], references: [id])
+  prescriptionItem PrescriptionItem? @relation(fields: [prescriptionItemId], references: [id])
+  serviceOnServiceItem ServiceOnServiceItem? @relation(fields: [serviceOnServiceItemId], references: [id])
 }
