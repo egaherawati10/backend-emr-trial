@@ -1,4 +1,7 @@
-import { PartialType } from '@nestjs/swagger';
-import { CreateServiceDto } from './create-service.dto';
+import { IsInt, IsOptional, Min } from 'class-validator';
 
-export class UpdateServiceDto extends PartialType(CreateServiceDto) {}
+export class UpdateServiceDto {
+  @IsOptional() @IsInt() @Min(1) patientId?: number;
+  @IsOptional() @IsInt() @Min(1) doctorId?: number;
+  @IsOptional() @IsInt() @Min(1) medicalRecordId?: number;
+}

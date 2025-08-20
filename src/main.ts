@@ -16,12 +16,15 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('EMR API')
-    .setDescription('Auth endpoints')
+    .setDescription('Electronic Medical Record REST API')
     .setVersion('1.0.0')
-    .addBearerAuth()
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
+      'jwt',
+    )
     .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  const doc = SwaggerModule.createDocument(app, config, { deepScanRoutes: true });
+  SwaggerModule.setup('docs', app, doc, { swaggerOptions: { persistAuthorization: true } });
 
   await app.listen(process.env.PORT ?? 3000);
 }

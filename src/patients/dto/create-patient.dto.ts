@@ -1,12 +1,14 @@
-import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsString } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 import { Gender } from '@prisma/client';
 
 export class CreatePatientDto {
+  @Type(() => Number)
   @IsInt()
-  userId: number;   // must link to existing User with role = patient
+  userId: number;
 
   @IsDateString()
-  dob: Date;
+  dob: string;
 
   @IsEnum(Gender)
   gender: Gender;
@@ -17,6 +19,8 @@ export class CreatePatientDto {
   @IsString()
   phone: string;
 
+  @IsOptional()
+  @Type(() => Number)
   @IsInt()
-  clerkId: number;
+  clerkId?: number;
 }

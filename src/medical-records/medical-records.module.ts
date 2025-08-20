@@ -1,9 +1,15 @@
 import { Module } from '@nestjs/common';
-import { MedicalRecordsService } from './medical-records.service';
-import { MedicalRecordsController } from './medical-records.controller';
+import { MedicalRecordController } from './medical-records.controller';
+import { MedicalRecordRepository } from './medical-records.repository';
+import { MedicalRecordService } from './medical-records.service';
+import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
-  controllers: [MedicalRecordsController],
-  providers: [MedicalRecordsService],
+  imports: [PrismaModule],
+  controllers: [MedicalRecordController],
+  providers: [
+    MedicalRecordRepository, 
+    MedicalRecordService],
+  exports: [MedicalRecordService],
 })
 export class MedicalRecordsModule {}

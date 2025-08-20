@@ -1,7 +1,7 @@
-import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
@@ -14,18 +14,21 @@ export class AuthController {
   }
 
   @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  @UseGuards(AuthGuard('local'))
+  login(@Req() req: any) {
+    // req.user is the SafeUser returned from validateUser()
+    return this.authService.login(req.user);
   }
 
   @Post('logout')
-  logout() {
-    return this.authService.logout();
+  @UseGuards(JwtAuthGuard)
+  logout(@Req() req: any) {
+    return this.authService.logout(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  profile(@Request() req: any) {
-    return this.authService.profile(req.user.userId);
+  profile(@Req() req: any) {
+    return this.authService.profile(req.user.id);
   }
 }
