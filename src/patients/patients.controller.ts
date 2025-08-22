@@ -7,113 +7,68 @@ import {
   ParseIntPipe,
   Patch,
   Post,
-  Req,
-  UseGuards,
-  Logger,
-  InternalServerErrorException,
-  HttpException,
+  Query,
 } from '@nestjs/common';
-import { PatientsService } from './patients.service';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
-import { UserRole } from '@prisma/client';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { Request } from 'express';
+import { QueryPatientDto } from './dto/query-patient.dto';
+import { PatientResponseDto, PaginatedPatientResponseDto } from './dto/patient-response.dto';
+import { PatientsService } from './patients.service';
+import { Can } from 'src/common/guards/can.decorator';
 
-interface AuthenticatedRequest extends Request {
-  user: {
-    id: number;
-    role: UserRole;
-  };
-}
-
+@ApiTags('patients')
+@ApiBearerAuth()
 @Controller('patients')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class PatientsController {
-  private readonly logger = new Logger(PatientsController.name);
+  constructor(private readonly service: PatientsService) {}
 
-  constructor(private readonly patientsService: PatientsService) {}
+  @Post()
+  @Can('Patient', 'create')
+  @ApiCreatedResponse({ type: PatientResponseDto })
+  @ApiConflictResponse({ description: 'Patient profile already exists for this user' })
+  @ApiBadRequestResponse({ description: 'Invalid input or foreign key' })
+  create(@Body() dto: CreatePatientDto) {
+    return this.service.create(dto);
+  }
 
   @Get()
-  @Roles(UserRole.admin, UserRole.doctor, UserRole.registration_clerk)
-  async findAll() {
-    try {
-      return await this.patientsService.findAll();
-    } catch (err) {
-      this.logger.error('findAll failed', err?.stack || err);
-      if (err instanceof HttpException) throw err;
-      throw new InternalServerErrorException('Failed to list patients');
-    }
+  @Can('Patient', 'read')
+  @ApiOkResponse({ type: PaginatedPatientResponseDto })
+  findAll(@Query() q: QueryPatientDto) {
+    return this.service.findMany(q);
   }
 
   @Get(':id')
-  @Roles(
-    UserRole.admin,
-    UserRole.doctor,
-    UserRole.registration_clerk,
-    UserRole.patient,
-  )
-  async findOne(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    try {
-      return await this.patientsService.findOne(id, req.user.id, req.user.role);
-    } catch (err) {
-      this.logger.error(`findOne failed for id=${id}`, err?.stack || err);
-      if (err instanceof HttpException) throw err;
-      throw new InternalServerErrorException('Failed to fetch patient');
-    }
-  }
-
-  @Post()
-  @Roles(UserRole.admin, UserRole.registration_clerk)
-  async create(@Body() dto: CreatePatientDto, @Req() req: AuthenticatedRequest) {
-    try {
-      return await this.patientsService.create(dto, req.user.id, req.user.role);
-    } catch (err) {
-      this.logger.error('create failed', err?.stack || err);
-      if (err instanceof HttpException) throw err;
-      throw new InternalServerErrorException('Failed to create patient');
-    }
+  @Can('Patient', 'read')
+  @ApiOkResponse({ type: PatientResponseDto })
+  @ApiNotFoundResponse({ description: 'Patient not found' })
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.service.findById(id);
   }
 
   @Patch(':id')
-  @Roles(UserRole.admin, UserRole.registration_clerk)
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdatePatientDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    try {
-      return await this.patientsService.update(
-        id,
-        dto,
-        req.user.id,
-        req.user.role,
-      );
-    } catch (err) {
-      this.logger.error(`update failed for id=${id}`, err?.stack || err);
-      if (err instanceof HttpException) throw err;
-      throw new InternalServerErrorException('Failed to update patient');
-    }
+  @Can('Patient', 'update')
+  @ApiOkResponse({ type: PatientResponseDto })
+  @ApiNotFoundResponse({ description: 'Patient not found' })
+  @ApiBadRequestResponse({ description: 'Invalid input or foreign key' })
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePatientDto) {
+    return this.service.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles(UserRole.admin, UserRole.registration_clerk)
-  async remove(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    try {
-      await this.patientsService.remove(id, req.user.id, req.user.role);
-      return { message: 'Patient deleted' };
-    } catch (err) {
-      this.logger.error(`remove failed for id=${id}`, err?.stack || err);
-      if (err instanceof HttpException) throw err;
-      throw new InternalServerErrorException('Failed to delete patient');
-    }
+  @Can('Patient', 'delete')
+  @ApiOkResponse({ description: 'Soft-deleted' })
+  @ApiNotFoundResponse({ description: 'Patient not found' })
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.service.delete(id);
   }
 }

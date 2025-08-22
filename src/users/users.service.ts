@@ -1,42 +1,88 @@
-import { Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+  import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
+import { IUsersService } from './users.service.interface';
+import { IUsersRepository } from './users.repository.interface';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UsersServiceItf } from './users.service.interface';
-import { UsersRepositoryItf, UsersRepositoryToken } from './users.repository.interface';
-import { Prisma, User } from '@prisma/client';
+import { QueryUserDto } from './dto/query-user.dto';
+import { UserResponseDto } from './dto/user-response.dto';
 
 @Injectable()
-export class UsersService implements UsersServiceItf {
-  constructor(
-    @Inject(UsersRepositoryToken)
-    private readonly usersRepository: UsersRepositoryItf,
-  ) {}
+export class UsersService implements IUsersService {
+  constructor(private readonly repo: IUsersRepository) {}
 
-  getAllUsers(): Promise<User[]> {
-      return this.usersRepository.findAll();
+  private toResponse(u: any): UserResponseDto {
+    // Already selected to safe fields in repo
+    return u as UserResponseDto;
   }
 
-  getUserById(id: number): Promise<User | null> {
-    return this.usersRepository.findById(id);
+  private mapPrismaError(e: any): never {
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      if (e.code === 'P2002') {
+        const target = (e.meta?.target as string[])?.join(', ') || 'unique field';
+        throw new ConflictException(`Duplicate value for ${target}`);
+      }
+    }
+    throw e;
   }
 
-  getUserByUsername(username: string): Promise<User | null> {
-    return this.usersRepository.findByUsername(username);
+  async create(dto: CreateUserDto): Promise<UserResponseDto> {
+    try {
+      const hashed = await bcrypt.hash(dto.password, 10);
+      const created = await this.repo.create({
+        name: dto.name,
+        username: dto.username,
+        email: dto.email,
+        password: hashed,
+        role: dto.role,
+        status: dto.status ?? 'active',
+      } as any);
+      return this.toResponse(created);
+    } catch (e) {
+      this.mapPrismaError(e);
+    }
   }
 
-  getUserByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findByEmail(email);
+  async findById(id: number): Promise<UserResponseDto> {
+    const user = await this.repo.findById(id);
+    if (!user) throw new NotFoundException('User not found');
+    return this.toResponse(user);
   }
 
-  createUser(data: Prisma.UserCreateInput): Promise<User> {
-    return this.usersRepository.create(data);
+  async findMany(q: QueryUserDto) {
+    const page = q.page ?? 1;
+    const limit = q.limit ?? 20;
+    const { data, total } = await this.repo.findMany({
+      search: q.search,
+      role: q.role,
+      status: q.status,
+      page,
+      limit,
+      sortBy: q.sortBy ?? 'createdAt',
+      order: q.order ?? 'desc',
+    });
+    const totalPages = Math.ceil(total / limit) || 1;
+    return { data: data.map(this.toResponse), meta: { page, limit, total, totalPages } };
   }
 
-  updateUser(id: number, data: Prisma.UserUpdateInput): Promise<User> {
-    return this.usersRepository.update(id, data);
+  async update(id: number, dto: UpdateUserDto): Promise<UserResponseDto> {
+    try {
+      const data: any = { ...dto };
+      if (dto.password) data.password = await bcrypt.hash(dto.password, 10);
+      const updated = await this.repo.update(id, data);
+      return this.toResponse(updated);
+    } catch (e) {
+      this.mapPrismaError(e);
+    }
   }
 
-  removeUser(id: number): Promise<void> {
-    return this.usersRepository.remove(id);
+  async delete(id: number): Promise<void> {
+    await this.repo.delete(id);
   }
 }

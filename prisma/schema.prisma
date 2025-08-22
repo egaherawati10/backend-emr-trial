@@ -28,6 +28,20 @@ enum PaymentStatus {
   cancelled
 }
 
+enum PrescriptionStatus {
+  draft
+  issued
+  dispensed
+  cancelled
+}
+
+enum ServiceStatus {
+  planned
+  in_progress
+  completed
+  cancelled
+}
+
 enum Gender {
   male
   female
@@ -41,76 +55,106 @@ enum PaymentMethod {
   transfer
 }
 
-// ================== MODELS ==================
-
-// ---------- USER ----------
-model User {
-  id        Int        @id @default(autoincrement())
-  name      String
-  username  String     @unique
-  email     String     @unique
-  password  String
-  role      UserRole
-  status    UserStatus @default(active)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-
-  patientProfile PatientProfile?
-  medicalRecords MedicalRecord[] @relation("DoctorMedicalRecords")
-  clerkRecords   MedicalRecord[] @relation("ClerkMedicalRecords")
-  records        Record[]
-  prescriptions  Prescription[]  @relation("DoctorPrescriptions")
-  pharmacistPrescriptions Prescription[] @relation("PharmacistPrescriptions")
-  services      Service[]
-  clerkPatientProfiles PatientProfile[] @relation("ClerkPatientProfiles")
+enum PaymentItemKind {
+  prescription_item
+  service_item
 }
 
-// ---------- PATIENT PROFILE ----------
+// ================== MODELS ==================
+
+model User {
+  id           Int        @id @default(autoincrement())
+  name         String
+  username     String     @unique
+  email        String     @unique
+  password     String
+  role         UserRole
+  status       UserStatus @default(active)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  tokenVersion Int        @default(0)
+
+  patientProfile          PatientProfile?
+  medicalRecords          MedicalRecord[]  @relation("DoctorMedicalRecords")
+  clerkRecords            MedicalRecord[]  @relation("ClerkMedicalRecords")
+  records                 Record[]         @relation("DoctorRecords")
+  prescriptions           Prescription[]   @relation("DoctorPrescriptions")
+  pharmacistPrescriptions Prescription[]   @relation("PharmacistPrescriptions")
+  servicesAsDoctor        Service[]        @relation("DoctorServices")
+  clerkPatientProfiles    PatientProfile[] @relation("ClerkPatientProfiles")
+
+  medicalRecordsCreated MedicalRecord[] @relation("MedicalRecordCreatedBy")
+  medicalRecordsUpdated MedicalRecord[] @relation("MedicalRecordUpdatedBy")
+  recordsCreated        Record[]        @relation("RecordCreatedBy")
+  recordsUpdated        Record[]        @relation("RecordUpdatedBy")
+  prescriptionsCreated  Prescription[]  @relation("PrescriptionCreatedBy")
+  prescriptionsUpdated  Prescription[]  @relation("PrescriptionUpdatedBy")
+  servicesCreated       Service[]       @relation("ServiceCreatedBy")
+  servicesUpdated       Service[]       @relation("ServiceUpdatedBy")
+  paymentsCreated       Payment[]       @relation("PaymentCreatedBy")
+  paymentsUpdated       Payment[]       @relation("PaymentUpdatedBy")
+
+  @@index([role, status])
+}
+
 model PatientProfile {
-  id        Int      @id @default(autoincrement())
-  userId    Int      @unique
+  id        Int       @id @default(autoincrement())
+  userId    Int       @unique
   dob       DateTime
   gender    Gender
   address   String
   phone     String
-  clerkId   Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  clerkId   Int?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-  user   User   @relation(fields: [userId], references: [id])
-  clerk  User   @relation("ClerkPatientProfiles", fields: [clerkId], references: [id])
+  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  clerk User? @relation("ClerkPatientProfiles", fields: [clerkId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
   medicalRecords MedicalRecord[]
   records        Record[]
   prescriptions  Prescription[]
   services       Service[]
   payments       Payment[]
+
+  @@index([gender])
+  @@index([phone])
+  @@index([clerkId])
 }
 
-// ---------- MEDICAL RECORD ----------
 model MedicalRecord {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   patientId Int
   doctorId  Int
   clerkId   Int
   visitDate DateTime
   diagnosis String
   notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
-  patient PatientProfile @relation(fields: [patientId], references: [id])
-  doctor  User           @relation("DoctorMedicalRecords", fields: [doctorId], references: [id])
-  clerk   User           @relation("ClerkMedicalRecords", fields: [clerkId], references: [id])
+  patient PatientProfile @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  doctor  User           @relation("DoctorMedicalRecords", fields: [doctorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  clerk   User           @relation("ClerkMedicalRecords", fields: [clerkId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  createdById Int?
+  updatedById Int?
+  createdBy   User? @relation("MedicalRecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  updatedBy   User? @relation("MedicalRecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   records       Record[]
   prescriptions Prescription[]
   services      Service[]
   payments      Payment[]
+
+  @@index([patientId, visitDate])
+  @@index([doctorId, visitDate])
 }
 
-// ---------- SOAP RECORD ----------
 model Record {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   medicalRecordId Int
   patientId       Int
   doctorId        Int
@@ -118,132 +162,206 @@ model Record {
   objective       String?
   assessment      String?
   planning        String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 
-  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id])
-  patient       PatientProfile @relation(fields: [patientId], references: [id])
-  doctor        User           @relation(fields: [doctorId], references: [id])
+  medicalRecord MedicalRecord  @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  doctor        User           @relation("DoctorRecords", fields: [doctorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  createdById Int?
+  updatedById Int?
+  createdBy   User? @relation("RecordCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  updatedBy   User? @relation("RecordUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([medicalRecordId])
+  @@index([patientId])
+  @@index([doctorId])
 }
 
-// ---------- MEDICINE ----------
 model Medicine {
-  id           Int      @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   name         String
   dosage       String
   type         String
-  manufacturer String
+  manufacturer String?
   stock        Int
-  price        Float
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  reorderLevel Int       @default(0)
+  unit         String    @default("unit")
+  batchNo      String?
+  expiryDate   DateTime?
+  price        Decimal   @db.Decimal(12, 2)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 
   prescriptionItems PrescriptionItem[]
+
+  @@unique([name, dosage])
+  @@index([type])
+  @@index([expiryDate])
 }
 
-// ---------- PRESCRIPTION ----------
 model Prescription {
-  id               Int       @id @default(autoincrement())
-  medicalRecordId  Int
-  doctorId         Int
-  pharmacistId     Int?
-  patientId        Int
-  dateIssued       DateTime
-  notes            String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id              Int                @id @default(autoincrement())
+  code            String             @unique @default(cuid())
+  medicalRecordId Int
+  doctorId        Int
+  pharmacistId    Int?
+  patientId       Int
+  status          PrescriptionStatus @default(issued)
+  dateIssued      DateTime           @default(now())
+  dateDispensed   DateTime?
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
 
-  medicalRecord    MedicalRecord @relation(fields: [medicalRecordId], references: [id])
-  doctor           User           @relation("DoctorPrescriptions", fields: [doctorId], references: [id])
-  pharmacist       User?          @relation("PharmacistPrescriptions", fields: [pharmacistId], references: [id])
-  patient          PatientProfile  @relation(fields: [patientId], references: [id])
+  medicalRecord MedicalRecord  @relation(fields: [medicalRecordId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  doctor        User           @relation("DoctorPrescriptions", fields: [doctorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  pharmacist    User?          @relation("PharmacistPrescriptions", fields: [pharmacistId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  items            PrescriptionItem[]
+  createdById Int?
+  updatedById Int?
+  createdBy   User? @relation("PrescriptionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  updatedBy   User? @relation("PrescriptionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  items PrescriptionItem[]
+
+  @@index([patientId, dateIssued])
+  @@index([status])
+  @@index([medicalRecordId])
+  @@index([doctorId])
+  @@index([pharmacistId])
+  @@index([status, dateDispensed])
 }
 
-// ---------- PRESCRIPTION ITEM ----------
 model PrescriptionItem {
-  id             Int      @id @default(autoincrement())
+  id             Int     @id @default(autoincrement())
   prescriptionId Int
   medicineId     Int
   dosage         String
   quantity       Int
-  price          Float
+  price          Decimal @db.Decimal(12, 2)
   instructions   String?
 
-  prescription Prescription @relation(fields: [prescriptionId], references: [id])
-  medicine     Medicine     @relation(fields: [medicineId], references: [id])
+  prescription Prescription  @relation(fields: [prescriptionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  medicine     Medicine      @relation(fields: [medicineId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   paymentItems PaymentItem[]
+
+  @@index([prescriptionId])
+  @@index([medicineId])
+  @@unique([prescriptionId, medicineId]) // one medicine per prescription
 }
 
-// ---------- SERVICE ----------
 model Service {
-  id             Int      @id @default(autoincrement())
-  patientId      Int
-  doctorId       Int
+  id              Int           @id @default(autoincrement())
+  code            String        @unique @default(cuid())
+  patientId       Int
+  doctorId        Int
   medicalRecordId Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  status          ServiceStatus @default(planned)
+  serviceDate     DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
 
-  patient       PatientProfile @relation(fields: [patientId], references: [id])
-  doctor        User           @relation(fields: [doctorId], references: [id])
-  medicalRecord MedicalRecord  @relation(fields: [medicalRecordId], references: [id])
+  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  doctor        User           @relation("DoctorServices", fields: [doctorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  medicalRecord MedicalRecord  @relation(fields: [medicalRecordId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  createdById Int?
+  updatedById Int?
+  createdBy   User? @relation("ServiceCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  updatedBy   User? @relation("ServiceUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   serviceItems ServiceOnServiceItem[]
+
+  @@index([patientId, serviceDate])
+  @@index([medicalRecordId])
+  @@index([status])
+  @@index([doctorId, status])
 }
 
-// ---------- SERVICE ITEM ----------
 model ServiceItem {
-  id        Int      @id @default(autoincrement())
-  name      String
-  price     Float
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  price     Decimal   @db.Decimal(12, 2)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   services ServiceOnServiceItem[]
+
+  @@index([price])
 }
 
-// ---------- SERVICE ON SERVICE ITEM ----------
 model ServiceOnServiceItem {
-  id           Int     @id @default(autoincrement())
-  serviceId    Int
+  id            Int     @id @default(autoincrement())
+  serviceId     Int
   serviceItemId Int
-  quantity     Int     @default(1)
-  price        Float
+  quantity      Int     @default(1)
+  unitPrice     Decimal @db.Decimal(12, 2)
 
-  service     Service     @relation(fields: [serviceId], references: [id])
-  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id])
+  service     Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  serviceItem ServiceItem @relation(fields: [serviceItemId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   paymentItems PaymentItem[]
 
   @@unique([serviceId, serviceItemId])
+  @@index([serviceId])
+  @@index([serviceItemId])
 }
 
-// ---------- PAYMENT ----------
 model Payment {
-  id             Int      @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
+  code            String        @unique @default(cuid())
   medicalRecordId Int
-  patientId      Int
-  status         PaymentStatus
-  method         PaymentMethod
-  date           DateTime
-  totalAmount    Float
+  patientId       Int
+  status          PaymentStatus @default(pending)
+  method          PaymentMethod
+  issuedAt        DateTime      @default(now())
+  paidAt          DateTime?
+  totalAmount     Decimal       @db.Decimal(12, 2) @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
 
-  medicalRecord MedicalRecord  @relation(fields: [medicalRecordId], references: [id])
-  patient       PatientProfile @relation(fields: [patientId], references: [id])
-  items         PaymentItem[]
+  medicalRecord MedicalRecord  @relation(fields: [medicalRecordId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  createdById Int?
+  updatedById Int?
+  createdBy   User? @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  updatedBy   User? @relation("PaymentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  items PaymentItem[]
+
+  @@index([patientId, issuedAt])
+  @@index([status, method])
+  @@index([medicalRecordId])
 }
 
-// ---------- PAYMENT ITEM ----------
 model PaymentItem {
-  id                    Int      @id @default(autoincrement())
-  paymentId             Int
-  description           String
-  amount                Float
-  prescriptionItemId    Int?
+  id                     Int             @id @default(autoincrement())
+  paymentId              Int
+  kind                   PaymentItemKind
+  description            String
+  amount                 Decimal         @db.Decimal(12, 2)
+  prescriptionItemId     Int?
   serviceOnServiceItemId Int?
 
-  payment         Payment         @relation(fields: [paymentId], references: [id])
-  prescriptionItem PrescriptionItem? @relation(fields: [prescriptionItemId], references: [id])
-  serviceOnServiceItem ServiceOnServiceItem? @relation(fields: [serviceOnServiceItemId], references: [id])
+  payment              Payment               @relation(fields: [paymentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  prescriptionItem     PrescriptionItem?     @relation(fields: [prescriptionItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  serviceOnServiceItem ServiceOnServiceItem? @relation(fields: [serviceOnServiceItemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([paymentId])
+  @@index([prescriptionItemId])
+  @@index([serviceOnServiceItemId])
+
+  // Prevent double-charging the same underlying line within a single payment
+  @@unique([paymentId, prescriptionItemId])
+  @@unique([paymentId, serviceOnServiceItemId])
 }

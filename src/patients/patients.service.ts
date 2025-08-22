@@ -1,113 +1,116 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, UserRole } from '@prisma/client';
+import { Prisma, Gender } from '@prisma/client';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { IPatientsRepository } from './patients.repository.interface';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
-import { IPatientsService } from './patients.service.interface';
-import { PatientsRepository } from './patients.repository';
-import { PatientWithRefs } from './patients.repository.interface';
-
-// RBAC allow-lists
-const CAN_CREATE_PATIENT = [UserRole.admin, UserRole.registration_clerk] as const;
-const CAN_UPDATE_PATIENT = [UserRole.admin, UserRole.registration_clerk] as const;
-const CAN_DELETE_PATIENT = [UserRole.admin, UserRole.registration_clerk] as const;
-
-const assertAllowed = (role: UserRole, allow: readonly UserRole[], msg: string) => {
-  if (!allow.includes(role)) throw new ForbiddenException(msg);
-};
+import { QueryPatientDto } from './dto/query-patient.dto';
+import { PatientResponseDto } from './dto/patient-response.dto';
 
 @Injectable()
-export class PatientsService implements IPatientsService {
-  constructor(private readonly patientsRepo: PatientsRepository) {}
+export class PatientsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly repo: IPatientsRepository,
+  ) {}
 
-  async findAll(): Promise<PatientWithRefs[]> {
-    try {
-      return await this.patientsRepo.findAll();
-    } catch {
-      throw new BadRequestException('Failed to fetch patients');
+  private toResponse(x: any): PatientResponseDto {
+    return x as PatientResponseDto;
+  }
+
+  private async assertUserIsPatient(userId: number) {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+    if (!u) throw new BadRequestException('userId does not exist');
+    if (u.role !== 'patient') throw new BadRequestException('userId must be a patient user');
+  }
+
+  private async assertClerkIfProvided(clerkId?: number | null) {
+    if (clerkId == null) return;
+    const c = await this.prisma.user.findUnique({
+      where: { id: clerkId },
+      select: { id: true, role: true },
+    });
+    if (!c) throw new BadRequestException('clerkId does not exist');
+    if (c.role !== 'registration_clerk') {
+      throw new BadRequestException('clerkId must be a registration_clerk');
     }
   }
 
-  async findOne(
-    id: number,
-    requesterId: number,
-    requesterRole: UserRole,
-  ): Promise<PatientWithRefs> {
-    try {
-      const patient = await this.patientsRepo.findOne(id);
-      if (!patient) throw new NotFoundException(`Patient with ID ${id} not found`);
+  async create(dto: CreatePatientDto): Promise<PatientResponseDto> {
+    await this.assertUserIsPatient(dto.userId);
+    await this.assertClerkIfProvided(dto.clerkId);
 
-      // Patient can only view their own profile
-      if (requesterRole === UserRole.patient && patient.user.id !== requesterId) {
-        throw new ForbiddenException('You are not allowed to view this patient profile');
+    try {
+      const created = await this.repo.create({
+        user: { connect: { id: dto.userId } },
+        dob: new Date(dto.dob),
+        gender: dto.gender,
+        address: dto.address,
+        phone: dto.phone,
+        ...(dto.clerkId ? { clerk: { connect: { id: dto.clerkId } } } : {}),
+      });
+      return this.toResponse(created);
+    } catch (e: any) {
+      // unique violation on userId (1:1)
+      if (e?.code === 'P2002') {
+        throw new ConflictException('Patient profile already exists for this user');
       }
-      return patient;
-    } catch (err) {
-      if (err instanceof NotFoundException || err instanceof ForbiddenException) throw err;
-      throw new BadRequestException('Failed to fetch patient');
-    }
-  }
-
-  async create(
-    data: CreatePatientDto,
-    requesterId: number,
-    requesterRole: UserRole,
-  ): Promise<PatientWithRefs> {
-    assertAllowed(requesterRole, CAN_CREATE_PATIENT, 'You are not allowed to create a patient profile');
-
-    try {
-      // auto-stamp clerkId
-      const { clerkId: _ignore, ...rest } = data;
-      return await this.patientsRepo.create({ ...rest, clerkId: requesterId } as CreatePatientDto);
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') throw new ConflictException('Patient profile for this user already exists');
-        if (error.code === 'P2003') throw new BadRequestException('Invalid userId or clerkId reference');
+      // FK violations (e.g., clerk)
+      if (e?.code === 'P2003') {
+        throw new BadRequestException('Invalid foreign key');
       }
-      throw new BadRequestException('Failed to create patient profile');
+      throw e;
     }
   }
 
-  async update(
-    id: number,
-    data: UpdatePatientDto,
-    _requesterId: number,
-    requesterRole: UserRole,
-  ): Promise<PatientWithRefs> {
-    assertAllowed(requesterRole, CAN_UPDATE_PATIENT, 'You are not allowed to update this patient profile');
-
-    try {
-      const existing = await this.patientsRepo.findOne(id);
-      if (!existing) throw new NotFoundException(`Patient with ID ${id} not found`);
-      return await this.patientsRepo.update(id, data);
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
-        throw new BadRequestException('Invalid userId or clerkId reference');
-      }
-      throw new BadRequestException('Failed to update patient profile');
-    }
+  async findById(id: number): Promise<PatientResponseDto> {
+    const p = await this.repo.findById(id);
+    if (!p) throw new NotFoundException('Patient not found');
+    return this.toResponse(p);
   }
 
-  async remove(
-    id: number,
-    _requesterId: number,
-    requesterRole: UserRole,
-  ): Promise<void> {
-    assertAllowed(requesterRole, CAN_DELETE_PATIENT, 'You are not allowed to delete this patient');
+  async findMany(q: QueryPatientDto) {
+    const page = q.page ?? 1;
+    const limit = q.limit ?? 20;
+    const { data, total } = await this.repo.findMany({
+      search: q.search,
+      gender: q.gender,
+      clerkId: q.clerkId,
+      page,
+      limit,
+      sortBy: q.sortBy ?? 'createdAt',
+      order: q.order ?? 'desc',
+    });
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    return { data: data.map(this.toResponse), meta: { page, limit, total, totalPages } };
+  }
 
-    try {
-      const existing = await this.patientsRepo.findOne(id);
-      if (!existing) throw new NotFoundException(`Patient with ID ${id} not found`);
-      await this.patientsRepo.delete(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) throw error;
-      throw new BadRequestException('Failed to delete patient');
-    }
+  async update(id: number, dto: UpdatePatientDto): Promise<PatientResponseDto> {
+    await this.assertClerkIfProvided(dto.clerkId as any);
+    const data: Prisma.PatientProfileUpdateInput = {
+      ...(dto.dob ? { dob: new Date(dto.dob) } : {}),
+      ...(dto.gender ? { gender: dto.gender } : {}),
+      ...(dto.address ? { address: dto.address } : {}),
+      ...(dto.phone ? { phone: dto.phone } : {}),
+      ...(dto.clerkId === null
+        ? { clerk: { disconnect: true } }
+        : dto.clerkId
+        ? { clerk: { connect: { id: dto.clerkId } } }
+        : {}),
+    };
+    const updated = await this.repo.update(id, data);
+    return this.toResponse(updated);
+  }
+
+  async delete(id: number): Promise<void> {
+    await this.repo.softDelete(id);
   }
 }

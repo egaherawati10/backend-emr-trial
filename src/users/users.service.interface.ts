@@ -1,11 +1,12 @@
-import { Prisma, User } from "@prisma/client";
+import { UserResponseDto } from './dto/user-response.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { QueryUserDto } from './dto/query-user.dto';
 
-export interface UsersServiceItf {
-    getAllUsers(): Promise<User[]>;
-    getUserById(id: number): Promise<User | null>;
-    getUserByUsername(username: string): Promise<User | null>;
-    getUserByEmail(email: string): Promise<User | null>;
-    createUser(data: Prisma.UserCreateInput): Promise<User>;
-    updateUser(id: number, data: Prisma.UserUpdateInput): Promise<User>;
-    removeUser(id: number): Promise<void>;
+export interface IUsersService {
+  create(dto: CreateUserDto): Promise<UserResponseDto>;
+  findById(id: number): Promise<UserResponseDto>;
+  findMany(q: QueryUserDto): Promise<{ data: UserResponseDto[]; meta: { page: number; limit: number; total: number; totalPages: number } }>;
+  update(id: number, dto: UpdateUserDto): Promise<UserResponseDto>;
+  delete(id: number): Promise<void>;
 }

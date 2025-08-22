@@ -1,13 +1,22 @@
-import { Prisma, User } from "@prisma/client";
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
 
-export const UsersRepositoryToken = 'UsersRepositoryToken';
+export type SafeUserSelect = {
+  id: true; name: true; username: true; email: true;
+  role: true; status: true; createdAt: true; updatedAt: true;
+};
 
-export interface UsersRepositoryItf {
-  findAll(): Promise<User[]>;
-  findById(id: number): Promise<User | null>;
-  findByUsername(username: string): Promise<User | null>;
-  findByEmail(email: string): Promise<User | null>;
-  create(data: Prisma.UserCreateInput): Promise<User>;
-  update(id: number, data: Prisma.UserUpdateInput): Promise<User>;
-  remove(id: number): Promise<void>;
+export interface IUsersRepository {
+  create(data: Prisma.UserCreateInput): Promise<Prisma.UserGetPayload<{ select: SafeUserSelect }>>;
+  findById(id: number): Promise<Prisma.UserGetPayload<{ select: SafeUserSelect }> | null>;
+  findMany(params: {
+    search?: string;
+    role?: UserRole;
+    status?: UserStatus;
+    page: number;
+    limit: number;
+    sortBy: 'createdAt' | 'updatedAt' | 'name' | 'username' | 'email';
+    order: 'asc' | 'desc';
+  }): Promise<{ data: Prisma.UserGetPayload<{ select: SafeUserSelect }>[]; total: number }>;
+  update(id: number, data: Prisma.UserUpdateInput): Promise<Prisma.UserGetPayload<{ select: SafeUserSelect }>>;
+  delete(id: number): Promise<void>;
 }

@@ -12,6 +12,10 @@ import { PaymentsModule } from './payments/payments.module';
 import { MedicinesModule } from './medicines/medicines.module';
 import { ServiceItemsModule } from './service-items/service-items.module';
 import { MedicalRecordsModule } from './medical-records/medical-records.module';
+import { PatientHubModule } from './patient-hub/patient-hub.module';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { PolicyGuard } from './common/guards/policy.guard';
 
 @Module({
   imports: [
@@ -33,8 +37,17 @@ import { MedicalRecordsModule } from './medical-records/medical-records.module';
     MedicalRecordsModule,
     MedicinesModule,
     ServiceItemsModule,
+    PatientHubModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, 
+      useClass: JwtAuthGuard 
+    },
+    { provide: APP_GUARD, 
+      useClass: PolicyGuard 
+    },
+  ],
 })
 export class AppModule {}

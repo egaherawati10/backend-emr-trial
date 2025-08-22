@@ -12,7 +12,10 @@ async function bootstrap() {
     forbidNonWhitelisted: true
   }));
 
-  app.enableCors();
+  app.enableCors({
+    origin: ["http:localhost:3001"],
+    credentials: true,
+  });
 
   const config = new DocumentBuilder()
     .setTitle('EMR API')

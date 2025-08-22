@@ -1,72 +1,111 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma, PatientProfile } from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, Gender } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { IPatientsRepository, PatientWithRefs } from './patients.repository.interface';
-import { CreatePatientDto } from './dto/create-patient.dto';
-import { UpdatePatientDto } from './dto/update-patient.dto';
+import { IPatientsRepository } from './patients.repository.interface';
 
-const patientInclude = {
-  user:  { select: { id: true, name: true, email: true, username: true, role: true } },
-  clerk: { select: { id: true, name: true, email: true, username: true, role: true } },
-} as const satisfies Prisma.PatientProfileInclude;
-
-// Normalize dob from string to Date
-const toDate = (d: string | Date): Date => (d instanceof Date ? d : new Date(d));
+const select = {
+  id: true,
+  userId: true,
+  dob: true,
+  gender: true,
+  address: true,
+  phone: true,
+  clerkId: true,
+  createdAt: true,
+  updatedAt: true,
+  user: { select: { id: true, name: true, username: true, email: true } },
+  clerk: { select: { id: true, name: true, username: true, email: true } },
+};
 
 @Injectable()
 export class PatientsRepository implements IPatientsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(): Promise<PatientWithRefs[]> {
-    return this.prisma.patientProfile.findMany({ include: patientInclude });
+  async create(data: Prisma.PatientProfileCreateInput) {
+    return this.prisma.patientProfile.create({ data, select });
   }
 
-  findOne(id: number): Promise<PatientWithRefs | null> {
-    return this.prisma.patientProfile.findUnique({
-      where: { id },
-      include: patientInclude,
+  async findById(id: number) {
+    return this.prisma.patientProfile.findFirst({
+      where: { id, deletedAt: null },
+      select,
     });
   }
 
-  findByUserId(userId: number): Promise<PatientWithRefs | null> {
-    return this.prisma.patientProfile.findUnique({
-      where: { userId },
-      include: patientInclude,
-    });
-  }
+  async findMany(params: {
+    search?: string;
+    gender?: Gender;
+    clerkId?: number;
+    page: number;
+    limit: number;
+    sortBy: 'createdAt' | 'updatedAt' | 'dob' | 'name';
+    order: 'asc' | 'desc';
+  }) {
+    const { search, gender, clerkId, page, limit, sortBy, order } = params;
 
-  create(dto: CreatePatientDto): Promise<PatientWithRefs> {
-    const data: Prisma.PatientProfileUncheckedCreateInput = {
-      userId: dto.userId,
-      dob: toDate(dto.dob as any),
-      gender: dto.gender,
-      address: dto.address,
-      phone: dto.phone,
-      clerkId: dto.clerkId!, // stamping
+    const where: Prisma.PatientProfileWhereInput = {
+      deletedAt: null,
+      ...(gender ? { gender } : {}),
+      ...(clerkId ? { clerkId } : {}),
+      ...(search
+        ? {
+            OR: [
+              { phone: { contains: search, mode: 'insensitive' } },
+              { address: { contains: search, mode: 'insensitive' } },
+              { user: {
+                  OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { email: { contains: search, mode: 'insensitive' } },
+                    { username: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            ],
+          }
+        : {}),
     };
-    return this.prisma.patientProfile.create({ data, include: patientInclude });
+
+    const orderBy =
+      sortBy === 'name'
+        ? ({ user: { name: order } } as Prisma.PatientProfileOrderByWithRelationInput)
+        : ({ [sortBy]: order } as Prisma.PatientProfileOrderByWithRelationInput);
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.patientProfile.findMany({
+        where,
+        select,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.patientProfile.count({ where }),
+    ]);
+
+    return { data, total };
   }
 
-  update(id: number, dto: UpdatePatientDto): Promise<PatientWithRefs> {
-    const data: Prisma.PatientProfileUncheckedUpdateInput = {
-      ...(dto.userId !== undefined ? { userId: dto.userId } : {}),
-      ...(dto.dob !== undefined ? { dob: toDate(dto.dob as any) } : {}),
-      ...(dto.gender !== undefined ? { gender: dto.gender } : {}),
-      ...(dto.address !== undefined ? { address: dto.address } : {}),
-      ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
-      ...(dto.clerkId !== undefined ? { clerkId: dto.clerkId } : {}),
-    };
-    return this.prisma.patientProfile.update({
-      where: { id },
-      data,
-      include: patientInclude,
-    });
+  async update(id: number, data: Prisma.PatientProfileUpdateInput) {
+    try {
+      return await this.prisma.patientProfile.update({
+        where: { id },
+        data,
+        select,
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2025') throw new NotFoundException('Patient not found');
+      throw e;
+    }
   }
 
-  delete(id: number): Promise<PatientWithRefs> {
-    return this.prisma.patientProfile.delete({
-      where: { id },
-      include: patientInclude,
-    });
+  async softDelete(id: number) {
+    try {
+      await this.prisma.patientProfile.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2025') throw new NotFoundException('Patient not found');
+      throw e;
+    }
   }
 }

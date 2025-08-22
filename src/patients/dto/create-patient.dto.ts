@@ -1,26 +1,23 @@
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
-import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Gender } from '@prisma/client';
+import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 
 export class CreatePatientDto {
-  @Type(() => Number)
-  @IsInt()
-  userId: number;
+  @ApiProperty() @IsInt() @Min(1)
+  userId!: number;
 
-  @IsDateString()
-  dob: string;
+  @ApiProperty() @IsDateString()
+  dob!: string;
 
-  @IsEnum(Gender)
-  gender: Gender;
+  @ApiProperty({ enum: Gender }) @IsEnum(Gender)
+  gender!: Gender;
 
-  @IsString()
-  address: string;
+  @ApiProperty() @IsString() @IsNotEmpty()
+  address!: string;
 
-  @IsString()
-  phone: string;
+  @ApiProperty() @IsString() @IsNotEmpty()
+  phone!: string;
 
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1)
   clerkId?: number;
 }
