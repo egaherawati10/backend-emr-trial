@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { PatientHubService } from './patient-hub.service';
-import { PatientHubController } from './patient-hub.controller';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { PatientHubService } from './patient-hub.service';
+import { PatientServicesController } from './patient-services.controller';
+import { PatientPaymentsController } from './patient-payments.controller';
 
 @Module({
-  controllers: [PatientHubController],
-  providers: [PatientHubService, PrismaService],
-  exports: [PatientHubService],
+  controllers: [PatientServicesController, PatientPaymentsController],
+  providers: [PrismaService, PatientHubService],
 })
 export class PatientHubModule {}

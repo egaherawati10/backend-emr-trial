@@ -253,7 +253,7 @@ model PrescriptionItem {
 
   @@index([prescriptionId])
   @@index([medicineId])
-  @@unique([prescriptionId, medicineId]) // one medicine per prescription
+  @@unique([prescriptionId, medicineId])
 }
 
 model Service {

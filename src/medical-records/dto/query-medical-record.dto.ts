@@ -1,42 +1,32 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsPositive, IsString } from 'class-validator';
 
 export class QueryMedicalRecordDto {
-  @IsOptional() @Transform(({value}) => Number(value)) @IsInt() @Min(1)
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  search?: string; // diagnosis/notes
+
+  @ApiPropertyOptional() @IsOptional() @IsDateString()
+  dateFrom?: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsDateString()
+  dateTo?: string;
+
+  @ApiPropertyOptional({ default: 1 })
+  @Transform(({ value }) => Number(value))
+  @IsOptional() @IsPositive()
   page?: number = 1;
 
-  @IsOptional() @Transform(({value}) => Number(value)) @IsInt() @Min(1)
-  pageSize?: number = 20;
+  @ApiPropertyOptional({ default: 20 })
+  @Transform(({ value }) => Number(value))
+  @IsOptional() @IsPositive()
+  limit?: number = 20;
 
-  @IsOptional() @IsIn(['id','visitDate','createdAt','updatedAt'])
-  sortBy?: 'id' | 'visitDate' | 'createdAt' | 'updatedAt' = 'visitDate';
+  @ApiPropertyOptional({ enum: ['visitDate','createdAt','updatedAt'], default: 'visitDate' })
+  @IsOptional() @IsIn(['visitDate','createdAt','updatedAt'])
+  sortBy?: 'visitDate' | 'createdAt' | 'updatedAt' = 'visitDate';
 
+  @ApiPropertyOptional({ enum: ['asc','desc'], default: 'desc' })
   @IsOptional() @IsIn(['asc','desc'])
-  sortOrder?: 'asc' | 'desc' = 'desc';
-
-  @IsOptional() @Transform(({value}) => Number(value))
-  patientId?: number;
-
-  @IsOptional() @Transform(({value}) => Number(value))
-  doctorId?: number;
-
-  @IsOptional() @Transform(({value}) => Number(value))
-  clerkId?: number;
-
-  @IsOptional() @IsDateString()
-  visitFrom?: string;
-
-  @IsOptional() @IsDateString()
-  visitTo?: string;
-
-  /**
-   * Comma-separated includes: patient,doctor,clerk,records,prescriptions,services,payments
-   * Nested are auto-included: prescriptions.items, services.serviceItems.serviceItem, payments.items
-   */
-  @IsOptional() @IsString()
-  include?: string;
-
-  /** Shortcut to include all relations */
-  @IsOptional() @Transform(({value}) => value === 'true' || value === true) @IsBoolean()
-  includeAll?: boolean;
+  order?: 'asc' | 'desc' = 'desc';
 }

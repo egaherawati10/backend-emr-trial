@@ -1,119 +1,77 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma, MedicalRecord, Record as SoapRecord } from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { IMedicalRecordRepository, MedicalRecordCreate, MedicalRecordInclude, MedicalRecordOrder, MedicalRecordUpdate, MedicalRecordWhere } from './medical-records.repository.interface';
+import { IMedicalRecordsRepository } from './medical-records.repository.interface';
 
+const userMin = { id: true, name: true, username: true, email: true };
+
+const select = {
+  id: true,
+  patientId: true,
+  doctorId: true,
+  clerkId: true,
+  visitDate: true,
+  diagnosis: true,
+  notes: true,
+  createdAt: true,
+  updatedAt: true,
+  createdById: true,
+  updatedById: true,
+  doctor: { select: userMin },
+  clerk: { select: userMin },
+};
 
 @Injectable()
-export class MedicalRecordRepository implements IMedicalRecordRepository {
+export class MedicalRecordsRepository implements IMedicalRecordsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findMany(params: {
-    skip?: number;
-    take?: number;
-    where?: MedicalRecordWhere;
-    orderBy?: MedicalRecordOrder;
-    include?: MedicalRecordInclude;
-  }): Promise<MedicalRecord[]> {
-    const { skip, take, where, orderBy, include } = params;
-    return this.prisma.medicalRecord.findMany({
-      skip, take, where, orderBy, include,
+  create(data: Prisma.MedicalRecordCreateInput) {
+    return this.prisma.medicalRecord.create({ data, select });
+  }
+
+  findById(id: number) {
+    return this.prisma.medicalRecord.findFirst({
+      where: { id, deletedAt: null },
+      select,
     });
   }
 
-  async count(where?: MedicalRecordWhere): Promise<number> {
-    return this.prisma.medicalRecord.count({ where });
+  async findMany(args: {
+    where: Prisma.MedicalRecordWhereInput; page: number; limit: number;
+    sortBy: 'visitDate' | 'createdAt' | 'updatedAt'; order: 'asc' | 'desc';
+  }) {
+    const { where, page, limit, sortBy, order } = args;
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.medicalRecord.findMany({
+        where: { ...where, deletedAt: null },
+        select,
+        orderBy: { [sortBy]: order },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.medicalRecord.count({ where: { ...where, deletedAt: null } }),
+    ]);
+    return { data, total };
   }
 
-  async findById(id: number, include?: MedicalRecordInclude): Promise<MedicalRecord | null> {
-    return this.prisma.medicalRecord.findUnique({
-      where: { id },
-      include,
-    });
-  }
-
-  async create(data: MedicalRecordCreate, include?: MedicalRecordInclude): Promise<MedicalRecord> {
-    return this.prisma.medicalRecord.create({ data, include });
-  }
-
-  async update(id: number, data: MedicalRecordUpdate, include?: MedicalRecordInclude): Promise<MedicalRecord> {
-    return this.prisma.medicalRecord.update({ where: { id }, data, include });
-  }
-
-  async delete(id: number): Promise<void> {
-    await this.prisma.medicalRecord.delete({ where: { id } });
-  }
-
-  async findRecordById(recordId: number): Promise<SoapRecord | null> {
-    return this.prisma.record.findUnique({ where: { id: recordId } });
-  }
-
-  async createRecord(data: Prisma.RecordUncheckedCreateInput): Promise<SoapRecord> {
-    return this.prisma.record.create({ data });
-  }
-
-  async updateRecord(
-    recordId: number,
-    data: Prisma.RecordUncheckedUpdateInput,
-  ): Promise<SoapRecord> {
-    return this.prisma.record.update({ where: { id: recordId }, data });
-  }
-
-  async deleteRecord(recordId: number): Promise<void> {
-    await this.prisma.record.delete({ where: { id: recordId } });
-  }
-}
-
-/**
- * Helper to build safe Prisma include from high-level flags/strings.
- * Nested includes:
- *  - prescriptions -> items
- *  - services -> serviceItems -> serviceItem
- *  - payments -> items
- */
-export function buildIncludeFromInput(input?: string | string[] | boolean): Prisma.MedicalRecordInclude | undefined {
-  if (!input) return undefined;
-  let keys: string[];
-  if (input === true || input === 'true') {
-    keys = ['patient','doctor','clerk','records','prescriptions','services','payments'];
-  } else if (Array.isArray(input)) {
-    keys = input;
-  } else {
-    keys = input.split(',').map(s => s.trim()).filter(Boolean);
-  }
-
-  const include: Prisma.MedicalRecordInclude = {};
-  for (const k of keys) {
-    switch (k) {
-      case 'patient':
-        include.patient = true;
-        break;
-      case 'doctor':
-        include.doctor = true;
-        break;
-      case 'clerk':
-        include.clerk = true;
-        break;
-      case 'records':
-        include.records = true;
-        break;
-      case 'prescriptions':
-        include.prescriptions = { include: { items: true } };
-        break;
-      case 'services':
-        include.services = {
-          include: {
-            serviceItems: { include: { serviceItem: true } },
-          },
-        };
-        break;
-      case 'payments':
-        include.payments = { include: { items: true } };
-        break;
-      default:
-        // ignore unknowns
-        break;
+  async update(id: number, data: Prisma.MedicalRecordUpdateInput) {
+    try {
+      return await this.prisma.medicalRecord.update({ where: { id }, data, select });
+    } catch (e: any) {
+      if (e?.code === 'P2025') throw new NotFoundException('Medical record not found');
+      throw e;
     }
   }
-  return Object.keys(include).length ? include : undefined;
+
+  async softDelete(id: number) {
+    try {
+      await this.prisma.medicalRecord.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2025') throw new NotFoundException('Medical record not found');
+      throw e;
+    }
+  }
 }

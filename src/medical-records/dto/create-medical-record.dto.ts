@@ -1,22 +1,19 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 
-export class CreateMedicalRecordDto {
-  @IsInt() @Min(1)
-  patientId!: number;
-
-  @IsInt() @Min(1)
+export class CreateMedicalRecordForPatientDto {
+  @ApiProperty() @IsInt() @Min(1)
   doctorId!: number;
 
-  @IsInt() @Min(1)
+  @ApiProperty() @IsInt() @Min(1)
   clerkId!: number;
 
-  @IsDateString()
-  visitDate!: string; // ISO string
+  @ApiProperty() @IsDateString()
+  visitDate!: string;
 
-  @IsString() @IsNotEmpty()
+  @ApiProperty() @IsString() @IsNotEmpty()
   diagnosis!: string;
 
-  @IsOptional()
-  @IsString()
+  @ApiPropertyOptional() @IsOptional() @IsString()
   notes?: string;
 }

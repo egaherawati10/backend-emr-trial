@@ -1,23 +1,19 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateMedicalRecordDto } from './create-medical-record.dto';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsInt, IsOptional, IsString, Min } from 'class-validator';
 
-export class UpdateMedicalRecordDto extends PartialType(CreateMedicalRecordDto) {
-  @IsOptional() @IsInt() @Min(1)
-  patientId?: number;
-
-  @IsOptional() @IsInt() @Min(1)
+export class UpdateMedicalRecordDto {
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1)
   doctorId?: number;
 
-  @IsOptional() @IsInt() @Min(1)
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1)
   clerkId?: number;
 
-  @IsOptional() @IsDateString()
+  @ApiPropertyOptional() @IsOptional() @IsDateString()
   visitDate?: string;
 
-  @IsOptional() @IsString()
+  @ApiPropertyOptional() @IsOptional() @IsString()
   diagnosis?: string;
 
-  @IsOptional() @IsString()
-  notes?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  notes?: string | null;
 }
