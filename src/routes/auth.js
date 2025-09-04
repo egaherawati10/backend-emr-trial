@@ -10,7 +10,7 @@
  *           schema:
  *             type: object
  *             properties:
- *               email:
+ *               usernameOrEmail:
  *                 type: string
  *               password:
  *                 type: string
@@ -22,7 +22,7 @@
  *             schema:
  *               type: object
  *               properties:
- *                 token:
+ *                 access_token:
  *                   type: string
- */
+*/
 router.post("/login", loginController);
